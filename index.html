@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fullscreen Video + Pomodoro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif;
+            color: #fff;
+        }
+
+        #background-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .center-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 30px 50px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            color: white;
+            height: 240px;
+            position: relative;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            right: -8px;
+            bottom: -8px;
+            border-radius: 24px;
+            background: conic-gradient(
+                from -90deg,
+                #7ed6df var(--progress-angle, 0deg),
+                rgba(255, 255, 255, 0.15) var(--progress-angle, 0deg),
+                rgba(255, 255, 255, 0.15) 360deg
+            );
+            z-index: -1;
+            padding: 3px;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+        }
+
+        .glass-card.glow::before {
+            filter: drop-shadow(0 0 12px rgba(126, 214, 223, 0.4));
+        }
+
+        .pomodoro-info {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 15px;
+            opacity: 0.85;
+            height: 1.5rem;
+        }
+
+        .timer {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 25px;
+        }
+
+        .btn-start {
+            min-width: 120px;
+            height: 44px;
+            padding: 0 24px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 15px;
+            background: transparent;
+            color: #ebf5fb;
+            border: 2px solid #ebf5fb;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+            outline: none;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-start:hover {
+            background: #7ed6df;
+            color: #111;
+            border-color: #7ed6df;
+        }
+
+        .icon-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            padding: 0;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.13);
+            color: #7ed6df;
+        }
+
+        .icon-btn svg {
+            width: 24px;
+            height: 24px;
+            display: block;
+            pointer-events: none;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            margin-top: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10;
+            left: 0;
+            top: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.35);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 36px 44px 28px;
+            color: #fff;
+            min-width: 340px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 18px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-align: center;
+            opacity: 0.95;
+        }
+
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            font-size: 1.05rem;
+            color: #eaeaea;
+            opacity: 0.92;
+        }
+
+        .form-row label {
+            margin: 0;
+        }
+
+        .modal-content input[type="number"] {
+            width: 90px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+            transition: border 0.2s, background 0.2s;
+        }
+
+        .modal-content input[type="number"]:focus {
+            border: 1.5px solid #7ed6df;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .checkbox-row {
+            margin-top: 18px;
+            display: flex;
+            align-items: center;
+            font-size: 1.05rem;
+            color: #eaeaea;
+            opacity: 0.92;
+        }
+
+        .modal-content input[type="checkbox"] {
+            margin-right: 8px;
+            accent-color: #7ed6df;
+            transform: scale(1.15);
+        }
+
+        .checkbox-row label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .modal-content .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 18px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.7rem;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .modal-content .close-btn:hover {
+            opacity: 1;
+        }
+
+        .modal-content .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 22px;
+            gap: 12px;
+        }
+
+        .modal-content button[type="submit"],
+        .modal-content .reset-btn {
+            min-width: 110px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 10px;
+            font-family: inherit;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, border 0.2s;
+            border: 2px solid transparent;
+            background: transparent;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content button[type="submit"] {
+            color: #ebf5fb;
+            border-color: #ebf5fb;
+        }
+
+        .modal-content button[type="submit"]:hover {
+            background: #ebf5fb;
+            color: #111;
+        }
+
+        .modal-content .reset-btn {
+            color: #ebf5fb;
+            border: 2px solid #ebf5fb;
+        }
+
+        .modal-content .reset-btn:hover {
+            background: #ebf5fb;
+            color: #111;
+        }
+
+        @media (max-width: 500px) {
+            .modal-content {
+                min-width: 90vw;
+                padding: 18px 8vw;
+            }
+
+            .glass-card {
+                padding: 24px;
+            }
+
+            .timer {
+                font-size: 3.2rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Background Video -->
+    <video autoplay muted loop playsinline id="background-video">
+        <source src="video2.mp4" type="video/mp4">
+    </video>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeSettings()" aria-label="Close">&times;</button>
+            <h2>Pomodoro Settings</h2>
+            <form id="settings-form" onsubmit="saveSettings(event)">
+                <div class="form-row">
+                    <label for="work-minutes">Work Duration (minutes):</label>
+                    <input type="number" id="work-minutes" min="1" max="120" required />
+                </div>
+
+                <div class="form-row">
+                    <label for="break-minutes">Short Break (minutes):</label>
+                    <input type="number" id="break-minutes" min="1" max="60" required />
+                </div>
+
+                <div class="form-row">
+                    <label for="long-break-minutes">Long Break (minutes):</label>
+                    <input type="number" id="long-break-minutes" min="1" max="60" required />
+                </div>
+
+                <div class="form-row">
+                    <label for="pomodoros-before-long" style="margin-right: 20px;">Pomodoros before Long Break:</label>
+                    <input type="number" id="pomodoros-before-long" min="1" max="10" required />
+                </div>
+
+                <div class="checkbox-row">
+                    <input type="checkbox" id="auto-start" />
+                    <label for="auto-start">Auto-start next session</label>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit">Save</button>
+                    <button type="button" class="reset-btn" onclick="resetSettings()">Reset to Default</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Pomodoro Glass Card -->
+    <div class="center-container">
+        <div class="glass-card" id="glass-card">
+            <div class="pomodoro-info" id="pomodoro-info"></div>
+            <div class="timer" id="timer">25:00</div>
+            <div class="controls">
+                <button class="btn-start" id="start-pause-btn" onclick="toggleTimer()">start</button>
+                <!-- Reset Button -->
+                <button class="icon-btn" onclick="resetTimer()" aria-label="Reset">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                    </svg>
+                </button>
+                <!-- Settings Button -->
+                <button class="icon-btn" onclick="openSettings()" aria-label="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULTS = {
+            work: 25,
+            break: 5,
+            longBreak: 15,
+            pomodorosBeforeLong: 4,
+            autoStart: false
+        };
+
+        function loadSettings() {
+            if (!window.pomodoroSettings) {
+                window.pomodoroSettings = { ...DEFAULTS };
+            }
+            return window.pomodoroSettings;
+        }
+
+        function saveSettingsToStorage(settings) {
+            window.pomodoroSettings = { ...settings };
+        }
+
+        let settings = loadSettings();
+        let mode = 'work';
+        let timer = settings.work * 60;
+        let initialTimer = settings.work * 60;
+        let timerInterval = null;
+        let pomodoroCount = 0;
+        let isRunning = false;
+
+        const timerDisplay = document.getElementById('timer');
+        const pomodoroInfo = document.getElementById('pomodoro-info');
+        const startPauseBtn = document.getElementById('start-pause-btn');
+        const glassCard = document.getElementById('glass-card');
+
+        function updateProgressBorder() {
+            const progress = ((initialTimer - timer) / initialTimer) * 100;
+            const angle = (progress / 100) * 360;
+            glassCard.style.setProperty('--progress-angle', `${angle}deg`);
+            
+            if (isRunning) {
+                glassCard.classList.add('glow');
+            } else {
+                glassCard.classList.remove('glow');
+            }
+        }
+
+        function updateDisplay() {
+            const minutes = Math.floor(timer / 60).toString().padStart(2, '0');
+            const seconds = (timer % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${minutes}:${seconds}`;
+
+            if (mode === 'work') {
+                pomodoroInfo.textContent = `Pomodoro: ${pomodoroCount + 1} / ${settings.pomodorosBeforeLong}`;
+            } else if (mode === 'break') {
+                pomodoroInfo.textContent = 'Short Break';
+            } else {
+                pomodoroInfo.textContent = 'Long Break';
+            }
+
+            updateProgressBorder();
+        }
+
+        function updateStartPauseButton() {
+            if (isRunning) {
+                startPauseBtn.textContent = 'pause';
+            } else {
+                startPauseBtn.textContent = 'start';
+            }
+        }
+
+        function toggleTimer() {
+            if (isRunning) {
+                pauseTimer();
+            } else {
+                startTimer();
+            }
+        }
+
+        function startTimer() {
+            if (timerInterval) return;
+            isRunning = true;
+            updateStartPauseButton();
+            updateDisplay();
+
+            timerInterval = setInterval(() => {
+                timer--;
+                updateDisplay();
+
+                if (timer <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    isRunning = false;
+                    updateStartPauseButton();
+                    handleSessionEnd();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            isRunning = false;
+            updateStartPauseButton();
+            updateDisplay();
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            isRunning = false;
+            updateStartPauseButton();
+
+            if (mode === 'work') {
+                timer = settings.work * 60;
+                initialTimer = settings.work * 60;
+            } else if (mode === 'break') {
+                timer = settings.break * 60;
+                initialTimer = settings.break * 60;
+            } else {
+                timer = settings.longBreak * 60;
+                initialTimer = settings.longBreak * 60;
+            }
+            updateDisplay();
+        }
+
+        function handleSessionEnd() {
+            if (mode === 'work') {
+                pomodoroCount++;
+                if (pomodoroCount >= settings.pomodorosBeforeLong) {
+                    mode = 'longBreak';
+                    timer = settings.longBreak * 60;
+                    initialTimer = settings.longBreak * 60;
+                    pomodoroCount = 0;
+                } else {
+                    mode = 'break';
+                    timer = settings.break * 60;
+                    initialTimer = settings.break * 60;
+                }
+            } else {
+                mode = 'work';
+                timer = settings.work * 60;
+                initialTimer = settings.work * 60;
+            }
+            updateDisplay();
+            if (settings.autoStart) startTimer();
+        }
+
+        function openSettings() {
+            document.getElementById('settings-modal').classList.add('active');
+            document.getElementById('work-minutes').value = settings.work;
+            document.getElementById('break-minutes').value = settings.break;
+            document.getElementById('long-break-minutes').value = settings.longBreak;
+            document.getElementById('pomodoros-before-long').value = settings.pomodorosBeforeLong;
+            document.getElementById('auto-start').checked = settings.autoStart;
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').classList.remove('active');
+        }
+
+        function saveSettings(event) {
+            event.preventDefault();
+            settings = {
+                work: parseInt(document.getElementById('work-minutes').value, 10),
+                break: parseInt(document.getElementById('break-minutes').value, 10),
+                longBreak: parseInt(document.getElementById('long-break-minutes').value, 10),
+                pomodorosBeforeLong: parseInt(document.getElementById('pomodoros-before-long').value, 10),
+                autoStart: document.getElementById('auto-start').checked
+            };
+            saveSettingsToStorage(settings);
+            mode = 'work';
+            pomodoroCount = 0;
+            timer = settings.work * 60;
+            initialTimer = settings.work * 60;
+            resetTimer();
+            closeSettings();
+        }
+
+        function resetSettings() {
+            settings = { ...DEFAULTS };
+            saveSettingsToStorage(settings);
+            mode = 'work';
+            pomodoroCount = 0;
+            timer = settings.work * 60;
+            initialTimer = settings.work * 60;
+            resetTimer();
+            closeSettings();
+        }
+
+        document.addEventListener('mousedown', function (e) {
+            const modal = document.getElementById('settings-modal');
+            if (modal.classList.contains('active')) {
+                const content = modal.querySelector('.modal-content');
+                if (!content.contains(e.target)) {
+                    closeSettings();
+                }
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeSettings();
+            }
+        });
+
+        updateDisplay();
+    </script>
+</body>
+
+</html>
